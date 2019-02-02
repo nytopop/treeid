@@ -4,6 +4,10 @@ version = "0.1.0"
 authors = ["nytopop <ericizoita@gmail.com>"]
 edition = "2018"
 license = "MIT"
+description = "An implementation of rational buckets for lexically ordered collections."
+documentation = "https://docs.rs/treeid"
+homepage = "https://github.com/nytopop/treeid"
+repository = "https://github.com/nytopop/treeid"
 
 [dependencies]
 itertools = "0.7.8"
