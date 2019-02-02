@@ -1,4 +1,4 @@
-# treeid
+# treeid [![crates.io](https://img.shields.io/crates/d/treeid.svg)](https://crates.io/crates/treeid) [![docs.rs](https://docs.rs/treeid/badge.svg)](https://docs.rs/treeid)
 An implementation of rational buckets for lexically ordered collections.
 
 # References
