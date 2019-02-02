@@ -29,7 +29,7 @@
 
 #![feature(test)]
 
-mod bitter;
+pub mod bitter;
 
 use self::bitter::*;
 use bitvec::Bits;

@@ -6,11 +6,11 @@ edition = "2018"
 license = "MIT"
 
 [dependencies]
-num-rational = "0.2.1"
-num-bigint = "0.2.0"
-bitvec = "0.6.0"
 itertools = "0.7.8"
+bitvec = "0.6.0"
 byteorder = "1.2.7"
 
 [dev-dependencies]
 rand = "0.6.0"
+num-rational = "0.2.1"
+num-bigint = "0.2.0"
