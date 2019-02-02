@@ -1,0 +1,16 @@
+[package]
+name = "treeid"
+version = "0.1.0"
+authors = ["nytopop <ericizoita@gmail.com>"]
+edition = "2018"
+license = "MIT"
+
+[dependencies]
+num-rational = "0.2.1"
+num-bigint = "0.2.0"
+bitvec = "0.6.0"
+itertools = "0.7.8"
+byteorder = "1.2.7"
+
+[dev-dependencies]
+rand = "0.6.0"
