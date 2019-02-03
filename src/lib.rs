@@ -37,7 +37,7 @@ use std::{cmp, iter};
 
 /// A position in the tree.
 ///
-/// Nodes are encoded to binary in a modified form of LCF[1] (mLCF).
+/// Nodes are encoded to binary in a modified form of LCF[1](https://www.researchgate.net/publication/261204300_An_order_preserving_finite_binary_encoding_of_the_rationals) (mLCF).
 ///
 /// Deviations from the LCF encoding as described by Matula et al:
 ///
