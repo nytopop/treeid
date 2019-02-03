@@ -48,6 +48,18 @@ use std::{cmp, iter};
 ///
 /// - leading high bit / low bit is elided because (p >= q >= 1)
 ///   and we don't need to differentiate from (1 <= p <= q).
+///
+/// This method of encoding sequences allows for a near infinite space of
+/// hierarchical nodes with a stable lexicographic sort order. This can
+/// be useful for encoding categories/buckets within a lexicographically
+/// sorted collection.
+///
+/// The encoded sort order mimics that of floating point digits (in base 2^64)
+/// extending to the right of a fixed number. `&[1, 2, 3]` and `&[3, 2]` sort
+/// relative to eachother just as `0.123` and `0.32` do. The sort order when
+/// encoded in binary form is thus equivalent to the sort order of the input
+/// sequence itself.
+///
 /// ```
 /// use treeid::Node;
 ///
@@ -58,6 +70,46 @@ use std::{cmp, iter};
 /// assert!(child.to_binary().gt(&node.to_binary()));
 /// assert_eq!(node, Node::from_binary(&*node.to_binary()).unwrap());
 /// ```
+///
+/// The key usability difference of treeid style nodes versus using a fixed
+/// prefix to encode categories is that treeid nodes can be split arbitrarily,
+/// without carefully mapping out a keyspace in advance. The downside is that
+/// nodes in treeid form will tend to take up more space than prefixes in a
+/// manually partitioned keyspace.
+///
+/// There is no limit to the length of a treeid sequence, other than practical
+/// concerns w.r.t. space consumption. The total size of an encoded treeid node
+/// can be found by taking the sum of 1 + the doubles of minimum binary sizes of
+/// each term - 1, and adding the number of terms - 1. The result rounded up to
+/// the next multiple of 64 will be the total bitsize.
+///
+/// For example, to find the size of the sequence `&[7, 4, 2]`, we perform:
+///
+/// - minimum size: `[3 (111), 3 (100), 2 (10)]`
+/// - subtract one: `[2, 2, 1]`
+/// - double      : `[4, 4, 2]`
+/// - add one     : `[5, 5, 3]`
+/// - summate     : `13`
+/// - add terms-1 : `15`
+/// - round to 64 : `64`
+///
+/// Which corresponds to the encoded form of:
+///
+/// `0b110111110001100 0...`
+///
+/// ```
+/// use treeid::Node;
+///
+/// let node = Node::from(&[7, 4, 2]);
+/// assert_eq!(
+///     // 7    |sep|4    |sep|2  |padding
+///     // 11011|1  |11000|1  |100|0...
+///
+///     &[0b11011111, 0b0001100_0, 0, 0, 0, 0, 0, 0],
+///     &*node.to_binary(),
+/// );
+/// ```
+///
 #[derive(Debug, PartialEq)]
 pub struct Node {
     loc: Vec<u64>,
@@ -76,6 +128,8 @@ impl Node {
 
     /// Constructs a node from its tree position as a series of
     /// natural numbers.
+    ///
+    /// Must not contain zeros.
     pub fn from(v: &[u64]) -> Self {
         assert!(!v.contains(&0));
         Node {
