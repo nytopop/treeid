@@ -110,7 +110,7 @@ use std::{cmp, iter};
 /// );
 /// ```
 ///
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Node {
     loc: Vec<u64>,
 }
@@ -129,14 +129,16 @@ impl Node {
     /// Constructs a node from its tree position as a series of
     /// natural numbers.
     ///
-    /// Must not contain zeros.
-    pub fn from(v: &[u64]) -> Self {
-        assert!(!v.contains(&0));
-        Node {
-            loc: v.iter().map(|&x| x).collect(),
-        }
+    /// Panics if the input contains any zeros.
+    pub fn from_vec(loc: Vec<u64>) -> Self {
+        assert!(!loc.contains(&0));
+        Node { loc }
     }
 
+    /// Get the parent of this node. Sorts before this node and any
+    /// of its siblings/children.
+    ///
+    /// The parent of the root is the root.
     pub fn parent(&self) -> Self {
         let mut parent = self.loc.clone();
         parent.pop();
@@ -147,9 +149,14 @@ impl Node {
         self.loc.pop();
     }
 
+    /// Get the specified child of this node. Sorts after this node,
+    /// but before any higher siblings.
+    ///
+    /// Panics if `id` is zero.
     pub fn child(&self, id: u64) -> Self {
+        assert!(id != 0);
         let mut child = self.loc.clone();
-        child.push(id + 1);
+        child.push(id);
         Node { loc: child }
     }
 
@@ -157,7 +164,12 @@ impl Node {
         self.loc.push(id + 1);
     }
 
+    /// Get the specified sibling of this node. Sort order is dependent
+    /// on the value of `id`, relative to the current node's last term.
+    ///
+    /// Panics if `id` is zero, and returns None for the root.
     pub fn sibling(&self, id: u64) -> Option<Self> {
+        assert!(id != 0);
         let mut sibling = self.loc.clone();
         (*sibling.last_mut()?) = id + 1;
         Some(Node { loc: sibling })
@@ -166,11 +178,14 @@ impl Node {
     pub fn sibling_mut(&mut self, id: u64) {
         assert!(id != 0);
         match self.loc.last_mut() {
-            None => self.loc.push(id + 1),
-            Some(c) => *c = id + 1,
+            None => self.loc.push(id),
+            Some(c) => *c = id,
         }
     }
 
+    /// Get the last sibling of this node. Sorts before this node.
+    ///
+    /// Returns None if this is a first child or the root.
     pub fn pred(&self) -> Option<Self> {
         let mut pred = self.loc.clone();
         let x = pred.last_mut()?;
@@ -181,15 +196,16 @@ impl Node {
         Some(Node { loc: pred })
     }
 
-    pub fn succ(&self) -> Self {
-        if self.loc.is_empty() {
-            return Node { loc: vec![1] };
-        }
+    /// Get the next sibling of this node. Sorts after this node.
+    ///
+    /// Returns None if this is the root.
+    pub fn succ(&self) -> Option<Self> {
         let mut succ = self.loc.clone();
-        (*succ.last_mut().unwrap()) += 1;
-        Node { loc: succ }
+        (*succ.last_mut()?) += 1;
+        Some(Node { loc: succ })
     }
 
+    /// Returns `true` if this is the root.
     pub fn is_root(&self) -> bool {
         self.loc.is_empty()
     }
@@ -350,11 +366,17 @@ impl Node {
     */
 }
 
-impl Clone for Node {
-    fn clone(&self) -> Self {
-        Node {
-            loc: self.loc.clone(),
-        }
+impl Default for Node {
+    fn default() -> Self {
+        Self::root()
+    }
+}
+
+impl<A: AsRef<[u64]>> From<A> for Node {
+    fn from(loc: A) -> Self {
+        assert!(!loc.as_ref().contains(&0));
+        let loc = loc.as_ref().iter().map(|&x| x).collect();
+        Node { loc }
     }
 }
 
@@ -540,7 +562,7 @@ mod tests {
 
         // parent < children
         for i in 0..250 {
-            node = node.succ();
+            node = node.succ().unwrap();
             if i % 100 == 0 {
                 node = node.child(rand::random());
             }
@@ -557,7 +579,7 @@ mod tests {
         // children < parent.succ()
         while node.loc.len() > 0 {
             for _ in 0..16 {
-                node = node.succ();
+                node = node.succ().unwrap();
 
                 // num_gt must be true as per proof in [0]
                 // lex_gt must be true as per proof in [1]
