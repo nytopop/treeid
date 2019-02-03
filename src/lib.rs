@@ -323,47 +323,6 @@ impl Node {
         stack.trailing_pad(8);
         stack.to_vec()
     }
-
-    /* A known good decoder that happens to be fairly slow.
-     *
-    /// Decodes the even indexed denominators of a modified LCF
-    /// encoded rational.
-    pub fn from_binary(bs: &[u8]) -> Option<Self> {
-        let bits: BigVec = BitVec::from(bs);
-        let mut it = bits.iter().peekable();
-        let mut stack: Vec<u64> = Vec::new();
-
-        for i in 0.. {
-            if i % 2 != 0 {
-                // odd indices should always be 1 high bit
-                guard(it.next()?)?;
-            } else {
-                let mut k = 0;
-                // consume k high bits, 1 low bit
-                while let Some(true) = it.next() {
-                    k += 1;
-                }
-
-                // assemble next term from the next k bits
-                let mut term: u64 = 1;
-                for _ in 0..k {
-                    let bit = it.next()?;
-                    term <<= 1;
-                    term |= bit as u64;
-                }
-                stack.push(term);
-            }
-
-            match it.peek() {
-                None => break,
-                Some(false) if i % 2 == 0 => break,
-                _ => continue,
-            }
-        }
-
-        Some(Node::from(&stack))
-    }
-    */
 }
 
 impl Default for Node {
