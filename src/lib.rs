@@ -283,7 +283,7 @@ impl Node {
             rotate_incr(&mut it, &mut cursor)?;
         }
 
-        Some(Node::from(&stack))
+        Some(Node::from_vec(stack))
     }
 
     /// Writes this id into a `Vec<[u8]>` using mLCF encoding. The output
