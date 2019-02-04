@@ -161,6 +161,7 @@ impl Node {
     }
 
     pub fn child_mut(&mut self, id: u64) {
+        assert!(id != 0);
         self.loc.push(id + 1);
     }
 
