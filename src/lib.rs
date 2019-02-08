@@ -30,11 +30,10 @@
 #![feature(test)]
 #![feature(specialization)]
 
-pub mod bitter;
-
 use self::bitter::*;
-use bitvec::Bits;
 use std::{cmp, cmp::Ordering, iter};
+
+pub mod bitter;
 
 /// Represents a location in the treeid hierarchy, and an arbitrary key.
 ///
@@ -393,7 +392,7 @@ impl Node {
             'payloader: while let Some(&&seg) = it.peek() {
                 // extract the only bits in the current byte that
                 // are part of the term we're reading.
-                let until_end: u8 = u8::WIDTH - cursor;
+                let until_end: u8 = U8_WIDTH - cursor;
                 let mut data_mask = (seg << cursor) >> cursor;
                 data_mask >>= until_end.saturating_sub(nz_tot);
 

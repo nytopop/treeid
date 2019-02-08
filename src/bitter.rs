@@ -300,7 +300,8 @@ impl AsRef<[u8]> for BitWriter {
     }
 }
 
-use bitvec::Bits;
+pub const U8_MASK: u8 = 7;
+pub const U8_WIDTH: u8 = 8;
 
 /// Returns the `k`'th bit of `x` as a `bool`.
 ///
@@ -318,7 +319,7 @@ use bitvec::Bits;
 /// ```
 #[inline]
 pub fn kth_bit(x: u8, k: u8) -> bool {
-    ((1 << (u8::MASK - k)) & x) != 0
+    ((1 << (U8_MASK - k)) & x) != 0
 }
 
 /// Returns the `k`'th bit of the next element in `it` as a `bool`,
@@ -354,7 +355,7 @@ where
 /// ```
 #[inline]
 pub fn rotate_add(x: u8, y: u8) -> u8 {
-    (x + y) & u8::MASK
+    (x + y) & U8_MASK
 }
 
 /// Advances `cursor` by `bits`, consuming an element of `it` if
