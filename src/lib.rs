@@ -28,6 +28,7 @@
 //!   [An order preserving finite binary encoding of the rationals](https://www.researchgate.net/publication/261204300_An_order_preserving_finite_binary_encoding_of_the_rationals)
 
 #![feature(test)]
+#![feature(specialization)]
 
 pub mod bitter;
 
