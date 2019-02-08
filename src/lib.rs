@@ -34,13 +34,74 @@ pub mod bitter;
 
 use self::bitter::*;
 use bitvec::Bits;
-use std::{cmp, iter};
+use std::{cmp, cmp::Ordering, iter};
 
-/// A position in the tree.
+/// Represents a location in the treeid hierarchy, and an arbitrary key.
 ///
+/// Taken together, the primary use case is to allow for arbitrarily nested
+/// ranges of keys in a flat, ordered collection like [BTreeMap](std::collections::BTreeMap).
+///
+/// Crucially, the sort order of treeid nodes remains stable even when serialized,
+/// allowing for them to be used efficiently with on-disk collections that do not
+/// support varying comparison operators. Even in collections that do, the lexicographic
+/// sort offered by a serialized treeid node is typically faster (and simpler) than
+/// having to deserialize keys for every comparison.
+///
+/// # Sort order
+/// The location of each node in the hierarchy is represented as a sequence of
+/// nonzero unsigned integers:
+///
+/// ```
+/// // Hierarchical Structure
+/// //
+/// //                /------------[root]-------------\
+/// //                |                               |
+/// //       /-------[1]-------\             /-------[2]-------\
+/// //       |                 |             |                 |
+/// //  /---[1,1]---\   /---[1,2]---\   /---[2,1]---\   /---[2,2]---\
+/// //  |           |   |           |   |           |   |           |
+/// // [1,1,1] [1,1,2] [1,2,1] [1,2,2] [2,1,1] [2,1,2] [2,2,1] [2,2,2]
+///
+/// // Ascending Sort Order
+/// //
+/// // [root]
+/// // [1]
+/// // [1,1]
+/// // [1,1,1]
+/// // [1,1,2]
+/// // [1,2]
+/// // [1,2,1]
+/// // [1,2,2]
+/// // [2]
+/// // [2,1]
+/// // [2,1,1]
+/// // [2,1,2]
+/// // [2,2]
+/// // [2,2,1]
+/// // [2,2,2]
+/// ```
+///
+/// Nodes in the same position, but with different keys will be ordered by the
+/// key.
+///
+/// ```
+/// use treeid::Node;
+///
+/// let a = Node::from_parts(&[1, 2], b"hello world");
+/// let b = Node::from_parts(&[1, 2, 1], b"1st key");
+/// let c = Node::from_parts(&[1, 2, 1], b"2nd key");
+/// let d = Node::from_parts(&[1, 3], b"some other key");
+///
+/// assert!(a < b && b < c && c < d);
+/// assert!(a.to_binary() < b.to_binary()
+///      && b.to_binary() < c.to_binary()
+///      && c.to_binary() < d.to_binary());
+/// ```
+///
+/// # Encoding format
 /// Nodes are encoded to binary in a modified form of LCF[1](https://www.researchgate.net/publication/261204300_An_order_preserving_finite_binary_encoding_of_the_rationals) (mLCF).
 ///
-/// Deviations from the LCF encoding as described by Matula et al:
+/// Technical deviations from LCF encoding as described by Matula et al:
 ///
 /// - only suitable for rationals p/q where one (out of 2) of the
 ///   continued fraction forms has both of the following properties:
@@ -50,42 +111,19 @@ use std::{cmp, iter};
 /// - leading high bit / low bit is elided because (p >= q >= 1)
 ///   and we don't need to differentiate from (1 <= p <= q).
 ///
-/// This method of encoding sequences allows for a near infinite space of
-/// hierarchical nodes with a stable lexicographic sort order. This can
-/// be useful for encoding categories/buckets within a lexicographically
-/// sorted collection.
+/// - a trailing zero byte is appended to allow for a suffix key
 ///
-/// The encoded sort order mimics that of floating point digits (in base 2^64)
-/// extending to the right of a fixed number. `&[1, 2, 3]` and `&[3, 2]` sort
-/// relative to eachother just as `0.123` and `0.32` do. The sort order when
-/// encoded in binary form is thus equivalent to the sort order of the input
-/// sequence itself.
+/// # Size
+/// There is no limit to the length of a treeid position, other than practical
+/// concerns w.r.t. space consumption. The total size of the positional portion
+/// of an encoded treeid node can be found by taking the sum of 1 + the doubles
+/// of minimum binary sizes of each term - 1, and adding the number of terms - 1.
+/// The result rounded to the next byte boundary will be the total bitsize.
 ///
-/// ```
-/// use treeid::Node;
+/// A single zero byte will follow to dilineate from the key portion, which is
+/// appended unchanged.
 ///
-/// let node = Node::from(&[2, 4]);
-/// let child = Node::from(&[2, 4, 1]);
-/// let sibling = Node::from(&[2, 5]);
-/// assert!(sibling.to_binary().gt(&child.to_binary()));
-/// assert!(child.to_binary().gt(&node.to_binary()));
-/// assert_eq!(node, Node::from_binary(&*node.to_binary()).unwrap());
-/// ```
-///
-/// The key usability difference of treeid style nodes versus using a fixed
-/// prefix to encode categories is that treeid nodes can be split arbitrarily,
-/// without carefully mapping out a keyspace in advance. The downside is that
-/// nodes in treeid form will tend to take up more space than prefixes in a
-/// manually partitioned keyspace.
-///
-/// There is no limit to the length of a treeid sequence, other than practical
-/// concerns w.r.t. space consumption. The total size of an encoded treeid node
-/// can be found by taking the sum of 1 + the doubles of minimum binary sizes of
-/// each term - 1, and adding the number of terms - 1. The result rounded to the
-/// next byte boundary will be the total bitsize. A single zero byte will follow
-/// to dilineate from the key portion.
-///
-/// For example, to find the size of the sequence `&[7, 4, 2]`, we perform:
+/// For example, to find the encoded size of the position `&[7, 4, 2]`, we perform:
 ///
 /// - minimum size: `[3 (111), 3 (100), 2 (10)]`
 /// - subtract one: `[2, 2, 1]`
@@ -112,10 +150,53 @@ use std::{cmp, iter};
 ///     &*node.to_binary(),
 /// );
 /// ```
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Node {
-    loc: Vec<u64>,
-    key: Vec<u8>,
+    loc: Vec<u64>, // location in the tree
+    key: Vec<u8>,  // arbitrary key
+}
+
+impl Default for Node {
+    fn default() -> Self {
+        Self::root()
+    }
+}
+
+impl Ord for Node {
+    fn cmp(&self, other: &Node) -> Ordering {
+        match self.loc.cmp(&other.loc) {
+            Ordering::Equal => self.key.cmp(&other.key),
+            o => o,
+        }
+    }
+}
+
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Node) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<A: AsRef<[u64]>> From<A> for Node {
+    default fn from(loc: A) -> Self {
+        assert!(!loc.as_ref().contains(&0));
+        Node {
+            loc: loc.as_ref().iter().map(|&x| x).collect(),
+            key: Vec::new(),
+        }
+    }
+}
+
+impl From<Vec<u64>> for Node {
+    fn from(loc: Vec<u64>) -> Self {
+        Self::from_vec(loc)
+    }
+}
+
+impl AsRef<[u8]> for Node {
+    fn as_ref(&self) -> &[u8] {
+        &self.key
+    }
 }
 
 impl Node {
@@ -384,34 +465,6 @@ impl Node {
         stack.push(0x00);
         stack.push_bytes(&self.key);
         stack.to_vec()
-    }
-}
-
-impl Default for Node {
-    fn default() -> Self {
-        Self::root()
-    }
-}
-
-impl<A: AsRef<[u64]>> From<A> for Node {
-    default fn from(loc: A) -> Self {
-        assert!(!loc.as_ref().contains(&0));
-        Node {
-            loc: loc.as_ref().iter().map(|&x| x).collect(),
-            key: Vec::new(),
-        }
-    }
-}
-
-impl From<Vec<u64>> for Node {
-    fn from(loc: Vec<u64>) -> Self {
-        Self::from_vec(loc)
-    }
-}
-
-impl AsRef<[u8]> for Node {
-    fn as_ref(&self) -> &[u8] {
-        &self.key
     }
 }
 
