@@ -80,8 +80,9 @@ use std::{cmp, iter};
 /// There is no limit to the length of a treeid sequence, other than practical
 /// concerns w.r.t. space consumption. The total size of an encoded treeid node
 /// can be found by taking the sum of 1 + the doubles of minimum binary sizes of
-/// each term - 1, and adding the number of terms - 1. The result rounded up to
-/// the next multiple of 64 will be the total bitsize.
+/// each term - 1, and adding the number of terms - 1. The result rounded to the
+/// next byte boundary will be the total bitsize. A single zero byte will follow
+/// to dilineate from the key portion.
 ///
 /// For example, to find the size of the sequence `&[7, 4, 2]`, we perform:
 ///
@@ -91,28 +92,29 @@ use std::{cmp, iter};
 /// - add one     : `[5, 5, 3]`
 /// - summate     : `13`
 /// - add terms-1 : `15`
-/// - round to 64 : `64`
+/// - round to 8  : `16`
+/// - add a byte  : `24`
 ///
 /// Which corresponds to the encoded form of:
 ///
-/// `0b110111110001100 0...`
+/// `0b11011111 0b00011000 0x0`
 ///
 /// ```
 /// use treeid::Node;
 ///
 /// let node = Node::from(&[7, 4, 2]);
 /// assert_eq!(
-///     // 7    |sep|4    |sep|2  |padding
-///     // 11011|1  |11000|1  |100|0...
+///     // 7    |sep|4    |sep|2  |padding   |key
+///     // 11011|1  |11000|1  |100|0000000000|
 ///
-///     &[0b11011111, 0b0001100_0, 0, 0, 0, 0, 0, 0],
+///     &[0b11011_1_11, 0b000_1_100_0, 0],
 ///     &*node.to_binary(),
 /// );
 /// ```
-///
 #[derive(Debug, PartialEq, Clone)]
 pub struct Node {
     loc: Vec<u64>,
+    key: Vec<u8>,
 }
 
 impl Node {
@@ -123,64 +125,124 @@ impl Node {
     /// assert_eq!(Node::from(&[]), Node::root());
     /// ```
     pub fn root() -> Self {
-        Node { loc: Vec::new() }
+        Node {
+            loc: Vec::new(),
+            key: Vec::new(),
+        }
     }
 
-    /// Constructs a node from its tree position as a series of
-    /// natural numbers.
+    /// Returns a reference to the tree position of this node.
+    pub fn position(&self) -> &[u64] {
+        &self.loc
+    }
+
+    /// Returns a reference to the key of this node.
+    pub fn key(&self) -> &[u8] {
+        &self.key
+    }
+
+    /// Constructs a node from its tree position as a series of natural
+    /// numbers.
     ///
     /// Panics if the input contains any zeros.
     pub fn from_vec(loc: Vec<u64>) -> Self {
-        assert!(!loc.contains(&0));
-        Node { loc }
+        Self::from_vec_parts(loc, Vec::new())
     }
 
-    /// Get the parent of this node. Sorts before this node and any
-    /// of its siblings/children.
+    /// Constructs a node from its tree position and key.
+    ///
+    /// Panics if the position contains any zeros.
+    pub fn from_parts<A: AsRef<[u64]>, B: AsRef<[u8]>>(loc: A, key: B) -> Self {
+        assert!(!loc.as_ref().contains(&0));
+        Node {
+            loc: loc.as_ref().iter().map(|&x| x).collect(),
+            key: key.as_ref().iter().map(|&x| x).collect(),
+        }
+    }
+
+    /// Constructs a node from its (owned) tree position and key.
+    ///
+    /// Panics if the position contains any zeros.
+    pub fn from_vec_parts(loc: Vec<u64>, key: Vec<u8>) -> Self {
+        assert!(!loc.contains(&0));
+        Node { loc, key }
+    }
+
+    /// Returns a node at the same location as the current node, but using
+    /// the provided key.
+    pub fn with_key<K: AsRef<[u8]>>(&self, key: K) -> Self {
+        Node {
+            loc: self.loc.clone(),
+            key: key.as_ref().iter().map(|&x| x).collect(),
+        }
+    }
+
+    /// Returns a node at the same location as the current node, but using
+    /// the provided (owned) key.
+    pub fn with_vec_key(&self, key: Vec<u8>) -> Self {
+        Node {
+            loc: self.loc.clone(),
+            key,
+        }
+    }
+
+    /// Sets the key for this node.
+    pub fn set_key<K: AsRef<[u8]>>(&mut self, key: K) {
+        self.key = key.as_ref().iter().map(|&x| x).collect();
+    }
+
+    /// Sets the (owned) key for this node.
+    pub fn set_vec_key(&mut self, key: Vec<u8>) {
+        self.key = key
+    }
+
+    /// Get the parent of this node. Sorts before this node and any of its
+    /// siblings/children.
     ///
     /// The parent of the root is the root.
     pub fn parent(&self) -> Self {
-        let mut parent = self.loc.clone();
-        parent.pop();
-        Node { loc: parent }
+        let mut parent = self.clone();
+        parent.parent_mut();
+        parent
     }
 
     pub fn parent_mut(&mut self) {
         self.loc.pop();
     }
 
-    /// Get the specified child of this node. Sorts after this node,
-    /// but before any higher siblings.
+    /// Get the specified child of this node. Sorts after this node, but
+    /// before any higher siblings.
     ///
     /// Panics if `id` is zero.
     pub fn child(&self, id: u64) -> Self {
-        assert!(id != 0);
-        let mut child = self.loc.clone();
-        child.push(id);
-        Node { loc: child }
+        let mut child = self.clone();
+        child.child_mut(id);
+        child
     }
 
     pub fn child_mut(&mut self, id: u64) {
         assert!(id != 0);
-        self.loc.push(id + 1);
+        self.loc.push(id);
     }
 
-    /// Get the specified sibling of this node. Sort order is dependent
-    /// on the value of `id`, relative to the current node's last term.
+    /// Get the specified sibling of this node. Sort order is dependent on
+    /// the value of `id`, relative to the current node's last term.
     ///
     /// Panics if `id` is zero, and returns None for the root.
     pub fn sibling(&self, id: u64) -> Option<Self> {
-        assert!(id != 0);
-        let mut sibling = self.loc.clone();
-        (*sibling.last_mut()?) = id + 1;
-        Some(Node { loc: sibling })
+        if self.is_root() {
+            return None;
+        }
+
+        let mut sibling = self.clone();
+        sibling.sibling_mut(id);
+        Some(sibling)
     }
 
     pub fn sibling_mut(&mut self, id: u64) {
         assert!(id != 0);
-        match self.loc.last_mut() {
-            None => self.loc.push(id),
-            Some(c) => *c = id,
+        if let Some(c) = self.loc.last_mut() {
+            *c = id;
         }
     }
 
@@ -188,22 +250,22 @@ impl Node {
     ///
     /// Returns None if this is a first child or the root.
     pub fn pred(&self) -> Option<Self> {
-        let mut pred = self.loc.clone();
-        let x = pred.last_mut()?;
+        let mut pred = self.clone();
+        let x = pred.loc.last_mut()?;
         if *x < 2 {
             return None;
         }
         *x -= 1;
-        Some(Node { loc: pred })
+        Some(pred)
     }
 
     /// Get the next sibling of this node. Sorts after this node.
     ///
     /// Returns None if this is the root.
     pub fn succ(&self) -> Option<Self> {
-        let mut succ = self.loc.clone();
-        (*succ.last_mut()?) += 1;
-        Some(Node { loc: succ })
+        let mut succ = self.clone();
+        (*succ.loc.last_mut()?) += 1;
+        Some(succ)
     }
 
     /// Returns `true` if this is the root.
@@ -211,15 +273,11 @@ impl Node {
         self.loc.is_empty()
     }
 
-    /// Decode an id from its mLCF encoded form. The input must have a
-    /// length that is an even multiple of 8 to allow unpacking into an
-    /// `&mut [u64]` directly.
-    // TODO: use variable width packs
+    /// Decode a node from its mLCF encoded form.
     pub fn from_binary(mlcf_encoded: &[u8]) -> Option<Self> {
-        let packed = pack_mlcf(mlcf_encoded);
-        let mut it = packed.iter().peekable();
+        let mut loc: Vec<u64> = Vec::new();
 
-        let mut stack: Vec<u64> = Vec::new();
+        let mut it = mlcf_encoded.iter().peekable();
         let mut cursor: u8 = 0;
         'chunker: loop {
             let mut nz_tot: u8 = 0;
@@ -253,7 +311,7 @@ impl Node {
             'payloader: while let Some(&&seg) = it.peek() {
                 // extract the only bits in the current byte that
                 // are part of the term we're reading.
-                let until_end: u8 = u64::WIDTH - cursor;
+                let until_end: u8 = u8::WIDTH - cursor;
                 let mut data_mask = (seg << cursor) >> cursor;
                 data_mask >>= until_end.saturating_sub(nz_tot);
 
@@ -269,12 +327,13 @@ impl Node {
                     break 'payloader;
                 }
             }
-            stack.push(term);
 
             // if we have gotten here, we have succesfully decoded a
             // term. the bit at cursor is set high if there are any
             // more terms to decode.
+            loc.push(term);
             if !kth_bit_iter(&mut it, cursor) {
+                it.next()?;
                 break 'chunker;
             }
 
@@ -283,21 +342,21 @@ impl Node {
             rotate_incr(&mut it, &mut cursor)?;
         }
 
-        Some(Node::from_vec(stack))
+        guard(it.next()? == &0)?; // consume key separator byte
+        let key = it.map(|&x| x).collect(); // key is the rest
+
+        Some(Self::from_vec_parts(loc, key))
     }
 
-    /// Writes this id into a `Vec<[u8]>` using mLCF encoding. The output
-    /// will be padded with trailing zero bytes such that its length is a
-    /// multiple of 8 - from_binary() can then pack it directly into an
-    /// `&mut [u64]` and decode up to 8 bytes per iter instead of up to 1.
+    /// Writes this id into a `Vec<[u8]>` using mLCF encoding.
     ///
     /// ```rust
     /// use treeid::*;
-    /// assert_eq!(&[0, 0, 0, 0, 0, 0, 0, 0], &*Node::from(&[1]).to_binary());
-    /// assert_eq!(&[0b10000000, 0, 0, 0, 0, 0, 0, 0], &*Node::from(&[2]).to_binary());
-    /// assert_eq!(&[0b10011000, 0, 0, 0, 0, 0, 0, 0], &*Node::from(&[2, 2]).to_binary());
+    /// assert_eq!(&[0b00000000, 0], &*Node::from(&[1]).to_binary());
+    /// assert_eq!(&[0b10000000, 0], &*Node::from(&[2]).to_binary());
+    /// assert_eq!(&[0b10011000, 0], &*Node::from(&[2, 2]).to_binary());
     /// assert_eq!(
-    ///     &[0b11000110, 0b11100111, 0b00100000, 0, 0, 0, 0, 0],
+    ///     &[0b11000110, 0b11100111, 0b00100000, 0],
     ///     &*Node::from(&[4, 3, 2, 5]).to_binary(),
     /// );
     /// ```
@@ -321,7 +380,8 @@ impl Node {
         }
 
         stack.align();
-        stack.trailing_pad(8);
+        stack.push(0x00);
+        stack.push_bytes(&self.key);
         stack.to_vec()
     }
 }
@@ -333,10 +393,24 @@ impl Default for Node {
 }
 
 impl<A: AsRef<[u64]>> From<A> for Node {
-    fn from(loc: A) -> Self {
+    default fn from(loc: A) -> Self {
         assert!(!loc.as_ref().contains(&0));
-        let loc = loc.as_ref().iter().map(|&x| x).collect();
-        Node { loc }
+        Node {
+            loc: loc.as_ref().iter().map(|&x| x).collect(),
+            key: Vec::new(),
+        }
+    }
+}
+
+impl From<Vec<u64>> for Node {
+    fn from(loc: Vec<u64>) -> Self {
+        Self::from_vec(loc)
+    }
+}
+
+impl AsRef<[u8]> for Node {
+    fn as_ref(&self) -> &[u8] {
+        &self.key
     }
 }
 
@@ -349,6 +423,7 @@ fn guard(x: bool) -> Option<()> {
 
 #[cfg(test)]
 mod tests {
+    extern crate rand;
     extern crate test;
 
     use self::test::Bencher;
@@ -507,24 +582,27 @@ mod tests {
         for i in 0..2u64.pow(14) {
             let v = it.next().unwrap();
             println!("raw input is: {:?}", v);
-            let nd = Node::from(&v);
+
+            let nd = Node::from_vec_parts(v, (1..=24).map(|_| rand::random()).collect());
             println!("roundtripping: #{} {:?}", i, nd);
+
             let bin = nd.to_binary();
-            println!("{:?}", bin);
+            println!("binary: {:?}", bin);
+
             assert_eq!(nd, Node::from_binary(&*bin).unwrap());
         }
     }
 
     #[test]
     fn lcf_enc() {
-        let mut node = Node::from(&[1]);
+        let mut node = Node::from_parts(&[1], b"hello worldo");
         let mut last = node.clone();
 
         // parent < children
         for i in 0..250 {
             node = node.succ().unwrap();
             if i % 100 == 0 {
-                node = node.child(rand::random());
+                node.child_mut(rand::random());
             }
 
             // num_gt must be true as per proof in [0]
@@ -551,7 +629,7 @@ mod tests {
                 last = node.clone();
             }
 
-            node = node.parent();
+            node.parent_mut();
         }
     }
 }

@@ -300,27 +300,25 @@ impl AsRef<[u8]> for BitWriter {
     }
 }
 
-extern crate byteorder;
 use bitvec::Bits;
-use byteorder::{BigEndian, ByteOrder};
 
 /// Returns the `k`'th bit of `x` as a `bool`.
 ///
-/// Behavior is undefined if `k >= 64`.
+/// Behavior is undefined if `k >= 8`.
 /// ```rust
 /// use treeid::bitter::*;
 /// assert_eq!(false, kth_bit(0, 0));
 /// assert_eq!(false, kth_bit(0, 4));
-/// assert_eq!(false, kth_bit(0, 8));
-/// assert_eq!(false, kth_bit(0, 23));
+/// assert_eq!(false, kth_bit(0, 7));
+/// assert_eq!(false, kth_bit(0, 6));
 /// assert_eq!(false, kth_bit(1, 0));
-/// assert_eq!(true, kth_bit(1, 63));
-/// assert_eq!(false, kth_bit(1, 62));
-/// assert_eq!(false, kth_bit(1, 23));
+/// assert_eq!(true, kth_bit(1, 7));
+/// assert_eq!(false, kth_bit(1, 6));
+/// assert_eq!(false, kth_bit(1, 5));
 /// ```
 #[inline]
-pub fn kth_bit(x: u64, k: u8) -> bool {
-    ((1 << (u64::MASK - k)) & x) != 0
+pub fn kth_bit(x: u8, k: u8) -> bool {
+    ((1 << (u8::MASK - k)) & x) != 0
 }
 
 /// Returns the `k`'th bit of the next element in `it` as a `bool`,
@@ -328,11 +326,11 @@ pub fn kth_bit(x: u64, k: u8) -> bool {
 ///
 /// If there is no next element, returns `false`.
 ///
-/// Behavior is undefined if `k >= 64`.
+/// Behavior is undefined if `k >= 8`.
 #[inline]
 pub fn kth_bit_iter<'a, I>(it: &mut std::iter::Peekable<I>, k: u8) -> bool
 where
-    I: Iterator<Item = &'a u64>,
+    I: Iterator<Item = &'a u8>,
 {
     match it.peek() {
         Some(&&seg) => kth_bit(seg, k),
@@ -341,22 +339,22 @@ where
 }
 
 /// Adds `y` to `x`, rotating back to `0` if the result
-/// exceeds `64`.
+/// exceeds `8`.
 ///
 /// No distinction is made in the number of rotations.
 ///
 /// ```rust
 /// use treeid::bitter::*;
 /// assert_eq!(1, rotate_add(0, 1));
-/// assert_eq!(63, rotate_add(0, 63));
-/// assert_eq!(0, rotate_add(0, 64));
-/// assert_eq!(1, rotate_add(0, 65));
-/// assert_eq!(63, rotate_add(0, 127));
-/// assert_eq!(0, rotate_add(0, 128));
+/// assert_eq!(7, rotate_add(0, 7));
+/// assert_eq!(0, rotate_add(0, 8));
+/// assert_eq!(1, rotate_add(0, 9));
+/// assert_eq!(7, rotate_add(0, 15));
+/// assert_eq!(0, rotate_add(0, 16));
 /// ```
 #[inline]
 pub fn rotate_add(x: u8, y: u8) -> u8 {
-    (x + y) & u64::MASK
+    (x + y) & u8::MASK
 }
 
 /// Advances `cursor` by `bits`, consuming an element of `it` if
@@ -364,7 +362,7 @@ pub fn rotate_add(x: u8, y: u8) -> u8 {
 #[inline]
 pub fn rotate_consume<'a, I>(it: &mut I, cursor: &mut u8, bits: u8) -> Option<bool>
 where
-    I: Iterator<Item = &'a u64>,
+    I: Iterator<Item = &'a u8>,
 {
     *cursor = rotate_add(*cursor, bits);
     let rotated = *cursor == 0 && bits != 0;
@@ -379,7 +377,7 @@ where
 #[inline]
 pub fn rotate_incr<'a, I>(it: &mut I, cursor: &mut u8) -> Option<bool>
 where
-    I: Iterator<Item = &'a u64>,
+    I: Iterator<Item = &'a u8>,
 {
     *cursor = rotate_add(*cursor, 1);
     let rotated = *cursor == 0;
@@ -387,12 +385,4 @@ where
         it.next()?;
     }
     Some(rotated)
-}
-
-/// Pack an mLCF encoded slice of `u8` into chunks of `u64`.
-#[inline]
-pub fn pack_mlcf(src: &[u8]) -> Vec<u64> {
-    let mut dst = vec![0; src.len() / 8];
-    BigEndian::read_u64_into(src, &mut dst);
-    dst
 }
