@@ -399,8 +399,7 @@ impl Node {
                 let mut data_mask = (seg << cursor) >> cursor;
                 data_mask >>= until_end.saturating_sub(nz_tot);
 
-                // push them into term. repeated application of
-                // this push-copy produces the final value.
+                // copy safe_bits bits from data_mask to term.
                 let safe_bits: u8 = cmp::min(nz_tot, until_end);
                 term <<= safe_bits;
                 term |= data_mask as u64;
@@ -417,6 +416,8 @@ impl Node {
             // more terms to decode.
             loc.push(term);
             if !kth_bit_iter(&mut it, cursor) {
+                // consume the current byte because the encoder aligns
+                // to the next byte boundary.
                 it.next()?;
                 break 'chunker;
             }
