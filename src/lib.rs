@@ -30,10 +30,13 @@
 #![feature(test)]
 #![feature(specialization)]
 
-use self::bitter::*;
 use std::{cmp, cmp::Ordering, iter};
 
+pub mod bits;
 pub mod bitter;
+
+use self::bits::*;
+use self::bitter::*;
 
 /// Represents a location in the treeid hierarchy, and an arbitrary key.
 ///
