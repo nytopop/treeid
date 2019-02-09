@@ -358,10 +358,10 @@ impl Node {
     }
 
     /// Decode a node from its mLCF encoded form.
-    pub fn from_binary(mlcf_encoded: &[u8]) -> Option<Self> {
+    pub fn from_binary<A: AsRef<[u8]>>(mlcf_encoded: A) -> Option<Self> {
         let mut loc: Vec<u64> = Vec::new();
 
-        let mut it = mlcf_encoded.iter().peekable();
+        let mut it = mlcf_encoded.as_ref().iter().peekable();
         let mut cursor: u8 = 0;
         'chunker: loop {
             let mut nz_tot: u8 = 0;
