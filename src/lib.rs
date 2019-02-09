@@ -216,11 +216,26 @@ impl Node {
     }
 
     /// Returns a reference to the tree position of this node.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from_parts(&[1, 2, 3], b"hello worldo");
+    ///
+    /// assert_eq!(node.position(), &[1, 2, 3]);
+    /// ```
     pub fn position(&self) -> &[u64] {
         &self.loc
     }
 
     /// Returns a reference to the key of this node.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from_parts(&[1, 2, 3], b"hello worldo");
+    /// assert_eq!(node.key(), b"hello worldo");
+    /// ```
     pub fn key(&self) -> &[u8] {
         &self.key
     }
@@ -236,6 +251,15 @@ impl Node {
     /// Constructs a node from its tree position and key.
     ///
     /// Panics if the position contains any zeros.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let from_parts = Node::from_parts(&[1, 2, 3], b"a key of some sort");
+    /// let another = Node::from(&[1, 2, 3]).with_key(b"a key of some sort");
+    ///
+    /// assert_eq!(from_parts, another);
+    /// ```
     pub fn from_parts<A: AsRef<[u64]>, B: AsRef<[u8]>>(loc: A, key: B) -> Self {
         assert!(!loc.as_ref().contains(&0));
         Node {
@@ -284,6 +308,16 @@ impl Node {
     /// siblings/children.
     ///
     /// The parent of the root is the root.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from(&[1, 2, 3]);
+    /// let par = node.parent();
+    ///
+    /// assert!(par < node);
+    /// assert_eq!(par, Node::from(&[1, 2]));
+    /// ```
     pub fn parent(&self) -> Self {
         let mut parent = self.clone();
         parent.parent_mut();
@@ -298,6 +332,18 @@ impl Node {
     /// before any higher siblings.
     ///
     /// Panics if `id` is zero.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from(&[1, 2, 3]);
+    /// let sibl = node.sibling(4).unwrap();
+    /// let child = node.child(42);
+    ///
+    /// assert!(child > node);
+    /// assert!(child < sibl);
+    /// assert_eq!(child, Node::from(&[1, 2, 3, 42]));
+    /// ```
     pub fn child(&self, id: u64) -> Self {
         let mut child = self.clone();
         child.child_mut(id);
@@ -313,6 +359,19 @@ impl Node {
     /// the value of `id`, relative to the current node's last term.
     ///
     /// Panics if `id` is zero, and returns None for the root.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from(&[1, 2, 3]);
+    /// let up = node.sibling(44).unwrap();
+    /// let down = node.sibling(2).unwrap();
+    ///
+    /// assert!(up > node);
+    /// assert!(down < node);
+    /// assert_eq!(up, Node::from(&[1, 2, 44]));
+    /// assert_eq!(down, Node::from(&[1, 2, 2]));
+    /// ```
     pub fn sibling(&self, id: u64) -> Option<Self> {
         if self.is_root() {
             return None;
@@ -333,6 +392,16 @@ impl Node {
     /// Get the last sibling of this node. Sorts before this node.
     ///
     /// Returns None if this is a first child or the root.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from(&[1, 2, 3]);
+    /// let pred = node.pred().unwrap();
+    ///
+    /// assert!(node > pred);
+    /// assert_eq!(pred, Node::from(&[1, 2, 2]));
+    /// ```
     pub fn pred(&self) -> Option<Self> {
         let mut pred = self.clone();
         let x = pred.loc.last_mut()?;
@@ -346,6 +415,16 @@ impl Node {
     /// Get the next sibling of this node. Sorts after this node.
     ///
     /// Returns None if this is the root.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from(&[1, 2, 3]);
+    /// let succ = node.succ().unwrap();
+    ///
+    /// assert!(node < succ);
+    /// assert_eq!(succ, Node::from(&[1, 2, 4]));
+    /// ```
     pub fn succ(&self) -> Option<Self> {
         let mut succ = self.clone();
         (*succ.loc.last_mut()?) += 1;
@@ -353,11 +432,26 @@ impl Node {
     }
 
     /// Returns `true` if this is the root.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let root = Node::root();
+    /// assert!(root.is_root());
+    /// ```
     pub fn is_root(&self) -> bool {
         self.loc.is_empty()
     }
 
     /// Decode a node from its mLCF encoded form.
+    ///
+    /// ```rust
+    /// use treeid::*;
+    ///
+    /// let node = Node::from_parts(&[1,2,32,4,32,5,7,5], b"i am a key");
+    /// let serialized = node.to_binary();
+    /// assert_eq!(node, Node::from_binary(&serialized).unwrap());
+    /// ```
     pub fn from_binary<A: AsRef<[u8]>>(mlcf_encoded: A) -> Option<Self> {
         let mut loc: Vec<u64> = Vec::new();
 
@@ -598,8 +692,9 @@ mod tests {
         println!();
         println!("2 . 5     : {:?}", Node::from_binary(&*n2.to_binary()),);
         println!();
+        assert!(n1 < n2);
         assert!(n1.to_ratio() < n2.to_ratio());
-        assert!(n2.to_binary().gt(&n1.to_binary()));
+        assert!(n1.to_binary() < n2.to_binary());
     }
 
     struct BfsIter {
@@ -662,12 +757,12 @@ mod tests {
                 node.child_mut(rand::random());
             }
 
-            // num_gt must be true as per proof in [0]
-            // lex_gt must be true as per proof in [1]
-            let num_gt = node.to_ratio() > last.to_ratio();
-            let lex_gt = node.to_binary().gt(&last.to_binary());
-            assert_eq!(num_gt, lex_gt, "forward");
-            assert!(num_gt || lex_gt, "forward");
+            assert!(last < node);
+            // must be true as per proof in [0]
+            assert!(last.to_ratio() < node.to_ratio());
+            // must be true as per proof in [1]
+            assert!(last.to_binary() < node.to_binary());
+
             last = node.clone();
         }
 
@@ -676,12 +771,11 @@ mod tests {
             for _ in 0..16 {
                 node = node.succ().unwrap();
 
-                // num_gt must be true as per proof in [0]
-                // lex_gt must be true as per proof in [1]
-                let num_gt = node.to_ratio() > last.to_ratio();
-                let lex_gt = node.to_binary().gt(&last.to_binary());
-                assert_eq!(num_gt, lex_gt, "backward");
-                assert!(num_gt || lex_gt, "backward");
+                assert!(last < node);
+                // must be true as per proof in [0]
+                assert!(last.to_ratio() < node.to_ratio());
+                // must be true as per proof in [1]
+                assert!(last.to_binary() < node.to_binary());
 
                 last = node.clone();
             }
