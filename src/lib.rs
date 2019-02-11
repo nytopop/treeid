@@ -234,6 +234,7 @@ impl Node {
     /// use treeid::*;
     ///
     /// let node = Node::from_parts(&[1, 2, 3], b"hello worldo");
+    ///
     /// assert_eq!(node.key(), b"hello worldo");
     /// ```
     pub fn key(&self) -> &[u8] {
@@ -314,8 +315,12 @@ impl Node {
     ///
     /// let node = Node::from(&[1, 2, 3]);
     /// let par = node.parent();
+    /// let child = node.child(4);
+    /// let sibl = node.sibling(1).unwrap();
     ///
     /// assert!(par < node);
+    /// assert!(par < child);
+    /// assert!(par < sibl);
     /// assert_eq!(par, Node::from(&[1, 2]));
     /// ```
     pub fn parent(&self) -> Self {
@@ -437,6 +442,7 @@ impl Node {
     /// use treeid::*;
     ///
     /// let root = Node::root();
+    ///
     /// assert!(root.is_root());
     /// ```
     pub fn is_root(&self) -> bool {
@@ -450,6 +456,7 @@ impl Node {
     ///
     /// let node = Node::from_parts(&[1,2,32,4,32,5,7,5], b"i am a key");
     /// let serialized = node.to_binary();
+    ///
     /// assert_eq!(node, Node::from_binary(&serialized).unwrap());
     /// ```
     pub fn from_binary<A: AsRef<[u8]>>(mlcf_encoded: A) -> Option<Self> {
@@ -531,6 +538,7 @@ impl Node {
     ///
     /// ```rust
     /// use treeid::*;
+    ///
     /// assert_eq!(&[0b00000000, 0], &*Node::from(&[1]).to_binary());
     /// assert_eq!(&[0b10000000, 0], &*Node::from(&[2]).to_binary());
     /// assert_eq!(&[0b10011000, 0], &*Node::from(&[2, 2]).to_binary());
@@ -544,7 +552,7 @@ impl Node {
         let odds = iter::repeat(&1).take(self.loc.len() - 1);
         let it = itertools::interleave(evens, odds);
 
-        let mut stack = BitWriter::new();
+        let mut stack = BitWriter::with_capacity(self.key.len() + self.loc.len());
         for (i, &x) in it.enumerate() {
             if i % 2 != 0 {
                 stack.push_bit(true);
@@ -752,6 +760,7 @@ mod tests {
 
         // parent < children
         for i in 0..250 {
+            node.set_vec_key((1..=48).map(|_| rand::random()).collect());
             node = node.succ().unwrap();
             if i % 100 == 0 {
                 node.child_mut(rand::random());
@@ -768,7 +777,10 @@ mod tests {
 
         // children < parent.succ()
         while node.loc.len() > 0 {
+            node.set_vec_key((1..=48).map(|_| rand::random()).collect());
+
             for _ in 0..16 {
+                node.set_vec_key((1..=48).map(|_| rand::random()).collect());
                 node = node.succ().unwrap();
 
                 assert!(last < node);
