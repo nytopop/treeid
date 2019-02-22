@@ -1,6 +1,6 @@
 [package]
 name = "treeid"
-version = "0.3.5"
+version = "0.3.6"
 authors = ["nytopop <ericizoita@gmail.com>"]
 edition = "2018"
 license = "MIT"

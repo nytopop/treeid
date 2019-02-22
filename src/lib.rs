@@ -38,6 +38,14 @@ pub mod bitter;
 use self::bits::*;
 use self::bitter::*;
 
+macro_rules! guard {
+    ($e:expr) => {
+        if !$e {
+            return None;
+        }
+    };
+}
+
 /// Represents a location in the treeid hierarchy, and an arbitrary key.
 ///
 /// Taken together, the primary use case is to allow for arbitrarily nested
@@ -207,6 +215,11 @@ impl Node {
     /// ```rust
     /// use treeid::*;
     /// assert_eq!(Node::from(&[]), Node::root());
+    /// assert_eq!(&[0x0], &*Node::root().to_binary());
+    /// assert_eq!(Node::root(), Node::from_binary(&[0x0]).unwrap());
+    ///
+    /// let keyed = Node::root().with_key(b"hello worldo");
+    /// assert_eq!(keyed, Node::from_binary(&*keyed.to_binary()).unwrap());
     /// ```
     pub fn root() -> Self {
         Node {
@@ -463,6 +476,12 @@ impl Node {
         let mut loc: Vec<u64> = Vec::new();
 
         let mut it = mlcf_encoded.as_ref().iter().peekable();
+        if Some(&&0) == it.peek() {
+            guard! { it.next()? == &0 }; // consume key separator byte
+            let key = it.map(|&x| x).collect(); // key is the rest
+            return Some(Self::from_vec_parts(loc, key));
+        }
+
         let mut cursor: u8 = 0;
         'chunker: loop {
             let mut nz_tot: u8 = 0;
@@ -477,7 +496,7 @@ impl Node {
                     continue 'prefixer;
                 }
 
-                guard(!kth_bit(seg, cursor))?;
+                guard! { !kth_bit(seg, cursor) };
                 break 'prefixer;
             }
 
@@ -528,7 +547,7 @@ impl Node {
             rotate_incr(&mut it, &mut cursor)?;
         }
 
-        guard(it.next()? == &0)?; // consume key separator byte
+        guard! { it.next()? == &0 }; // consume key separator byte
         let key = it.map(|&x| x).collect(); // key is the rest
 
         Some(Self::from_vec_parts(loc, key))
@@ -549,7 +568,7 @@ impl Node {
     /// ```
     pub fn to_binary(&self) -> Vec<u8> {
         let evens = self.loc.iter();
-        let odds = iter::repeat(&1).take(self.loc.len() - 1);
+        let odds = iter::repeat(&1).take(self.loc.len().saturating_sub(1));
         let it = itertools::interleave(evens, odds);
 
         let mut stack = BitWriter::with_capacity(self.key.len() + self.loc.len());
@@ -571,13 +590,6 @@ impl Node {
         stack.push_bytes(&self.key);
         stack.to_vec()
     }
-}
-
-fn guard(x: bool) -> Option<()> {
-    if x {
-        return Some(());
-    }
-    None
 }
 
 #[cfg(test)]
