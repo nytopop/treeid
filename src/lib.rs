@@ -603,11 +603,8 @@ mod tests {
     use num_rational::Ratio;
 
     impl Node {
-        fn to_ratio(&self) -> Ratio<BigUint> {
-            Self::as_ratio(&self.cf_expansion())
-        }
-
-        fn as_ratio(ex: &[u64]) -> Ratio<BigUint> {
+        fn as_ratio(&self) -> Ratio<BigUint> {
+            let ex = &self.cf_expansion();
             let one = Ratio::new(BigUint::from(1usize), BigUint::from(1usize));
             let mut last = Ratio::from_integer(BigUint::from(0usize));
             for i in (0..ex.len()).rev() {
@@ -620,7 +617,7 @@ mod tests {
         fn cf_expansion(&self) -> Vec<u64> {
             let evens = self.loc.iter();
             let odds = iter::repeat(&1).take(self.loc.len() - 1);
-            itertools::interleave(evens, odds).map(|&x| x).collect()
+            itertools::interleave(evens, odds).cloned().collect()
         }
     }
 
@@ -713,7 +710,7 @@ mod tests {
         println!("2 . 5     : {:?}", Node::from_binary(&*n2.to_binary()),);
         println!();
         assert!(n1 < n2);
-        assert!(n1.to_ratio() < n2.to_ratio());
+        assert!(n1.as_ratio() < n2.as_ratio());
         assert!(n1.to_binary() < n2.to_binary());
     }
 
@@ -739,7 +736,7 @@ mod tests {
                 .stack
                 .to_radix_le(self.radix)
                 .iter()
-                .map(|&x| (x + 1) as u64)
+                .map(|&x| u64::from(x + 1))
                 .collect();
             self.stack += BigUint::from(1u8);
             Some(item)
@@ -780,7 +777,7 @@ mod tests {
 
             assert!(last < node);
             // must be true as per proof in [0]
-            assert!(last.to_ratio() < node.to_ratio());
+            assert!(last.as_ratio() < node.as_ratio());
             // must be true as per proof in [1]
             assert!(last.to_binary() < node.to_binary());
 
@@ -788,7 +785,7 @@ mod tests {
         }
 
         // children < parent.succ()
-        while node.loc.len() > 0 {
+        while !node.loc.is_empty() {
             node.set_vec_key((1..=48).map(|_| rand::random()).collect());
 
             for _ in 0..16 {
@@ -797,7 +794,7 @@ mod tests {
 
                 assert!(last < node);
                 // must be true as per proof in [0]
-                assert!(last.to_ratio() < node.to_ratio());
+                assert!(last.as_ratio() < node.as_ratio());
                 // must be true as per proof in [1]
                 assert!(last.to_binary() < node.to_binary());
 
