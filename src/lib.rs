@@ -191,7 +191,7 @@ impl<A: AsRef<[u64]>> From<A> for Node {
     default fn from(loc: A) -> Self {
         assert!(!loc.as_ref().contains(&0));
         Node {
-            loc: loc.as_ref().iter().cloned().collect(),
+            loc: loc.as_ref().to_vec(),
             key: Vec::new(),
         }
     }
@@ -277,8 +277,8 @@ impl Node {
     pub fn from_parts<A: AsRef<[u64]>, B: AsRef<[u8]>>(loc: A, key: B) -> Self {
         assert!(!loc.as_ref().contains(&0));
         Node {
-            loc: loc.as_ref().iter().map(|&x| x).collect(),
-            key: key.as_ref().iter().cloned().collect(),
+            loc: loc.as_ref().to_vec(),
+            key: key.as_ref().to_vec(),
         }
     }
 
@@ -295,7 +295,7 @@ impl Node {
     pub fn with_key<K: AsRef<[u8]>>(&self, key: K) -> Self {
         Node {
             loc: self.loc.clone(),
-            key: key.as_ref().iter().cloned().collect(),
+            key: key.as_ref().to_vec(),
         }
     }
 
@@ -310,7 +310,7 @@ impl Node {
 
     /// Sets the key for this node.
     pub fn set_key<K: AsRef<[u8]>>(&mut self, key: K) {
-        self.key = key.as_ref().iter().cloned().collect();
+        self.key = key.as_ref().to_vec();
     }
 
     /// Sets the (owned) key for this node.
@@ -478,7 +478,7 @@ impl Node {
         let mut it = mlcf_encoded.as_ref().iter().peekable();
         if Some(&&0) == it.peek() {
             guard! { it.next()? == &0 }; // consume key separator byte
-            let key = it.map(|&x| x).collect(); // key is the rest
+            let key = it.cloned().collect(); // key is the rest
             return Some(Self::from_vec_parts(loc, key));
         }
 
@@ -588,7 +588,7 @@ impl Node {
         stack.align();
         stack.push(0x00);
         stack.push_bytes(&self.key);
-        stack.to_vec()
+        stack.into_vec()
     }
 }
 

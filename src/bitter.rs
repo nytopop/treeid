@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BitWriter {
     out: Vec<u8>, // output buffer
     cache: u8,    // unwritten bits are stored here
@@ -8,11 +8,7 @@ pub struct BitWriter {
 impl BitWriter {
     #[inline]
     pub fn new() -> Self {
-        BitWriter {
-            out: Vec::new(),
-            cache: 0,
-            bits: 0,
-        }
+        Self::default()
     }
 
     #[inline]
@@ -176,7 +172,7 @@ impl BitWriter {
 
         // the bits higher than n are read as well,
         // so they must be zeroed.
-        let r = (r << 64 - n) >> 64 - n;
+        let r = r << (64 - n) >> (64 - n);
 
         let new_bits = self.bits + n;
         if new_bits < 8 {
@@ -276,7 +272,7 @@ impl BitWriter {
     }
 
     #[inline]
-    pub fn to_vec(self) -> Vec<u8> {
+    pub fn into_vec(self) -> Vec<u8> {
         self.out
     }
 
