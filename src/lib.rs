@@ -191,7 +191,7 @@ impl<A: AsRef<[u64]>> From<A> for Node {
     default fn from(loc: A) -> Self {
         assert!(!loc.as_ref().contains(&0));
         Node {
-            loc: loc.as_ref().iter().map(|&x| x).collect(),
+            loc: loc.as_ref().iter().cloned().collect(),
             key: Vec::new(),
         }
     }
@@ -278,7 +278,7 @@ impl Node {
         assert!(!loc.as_ref().contains(&0));
         Node {
             loc: loc.as_ref().iter().map(|&x| x).collect(),
-            key: key.as_ref().iter().map(|&x| x).collect(),
+            key: key.as_ref().iter().cloned().collect(),
         }
     }
 
@@ -295,7 +295,7 @@ impl Node {
     pub fn with_key<K: AsRef<[u8]>>(&self, key: K) -> Self {
         Node {
             loc: self.loc.clone(),
-            key: key.as_ref().iter().map(|&x| x).collect(),
+            key: key.as_ref().iter().cloned().collect(),
         }
     }
 
@@ -310,7 +310,7 @@ impl Node {
 
     /// Sets the key for this node.
     pub fn set_key<K: AsRef<[u8]>>(&mut self, key: K) {
-        self.key = key.as_ref().iter().map(|&x| x).collect();
+        self.key = key.as_ref().iter().cloned().collect();
     }
 
     /// Sets the (owned) key for this node.
@@ -522,7 +522,7 @@ impl Node {
                 // copy safe_bits bits from data_mask to term.
                 let safe_bits: u8 = cmp::min(nz_tot, until_end);
                 term <<= safe_bits;
-                term |= data_mask as u64;
+                term |= u64::from(data_mask);
                 nz_tot -= safe_bits;
 
                 rotate_consume(&mut it, &mut cursor, safe_bits)?;
@@ -548,7 +548,7 @@ impl Node {
         }
 
         guard! { it.next()? == &0 }; // consume key separator byte
-        let key = it.map(|&x| x).collect(); // key is the rest
+        let key = it.cloned().collect(); // key is the rest
 
         Some(Self::from_vec_parts(loc, key))
     }
