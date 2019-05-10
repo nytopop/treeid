@@ -391,9 +391,7 @@ impl Node {
     /// assert_eq!(down, Node::from(&[1, 2, 2]));
     /// ```
     pub fn sibling(&self, id: u64) -> Option<Self> {
-        if self.is_root() {
-            return None;
-        }
+        guard! { !self.is_root() };
 
         let mut sibling = self.clone();
         sibling.sibling_mut(id);
@@ -423,9 +421,7 @@ impl Node {
     pub fn pred(&self) -> Option<Self> {
         let mut pred = self.clone();
         let x = pred.loc.last_mut()?;
-        if *x < 2 {
-            return None;
-        }
+        guard! { *x >= 2 };
         *x -= 1;
         Some(pred)
     }
