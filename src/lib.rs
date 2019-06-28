@@ -27,8 +27,7 @@
 //! - [1] David W. Matula, Peter Kornerup
 //!   [An order preserving finite binary encoding of the rationals](https://www.researchgate.net/publication/261204300_An_order_preserving_finite_binary_encoding_of_the_rationals)
 
-#![feature(test)]
-#![feature(specialization)]
+#![feature(test, specialization)]
 
 use std::{cmp, cmp::Ordering, iter};
 
@@ -160,16 +159,10 @@ macro_rules! guard {
 ///     &*node.to_binary(),
 /// );
 /// ```
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Node {
     loc: Vec<u64>, // location in the tree
     key: Vec<u8>,  // arbitrary key
-}
-
-impl Default for Node {
-    fn default() -> Self {
-        Self::root()
-    }
 }
 
 impl Ord for Node {
@@ -222,10 +215,7 @@ impl Node {
     /// assert_eq!(keyed, Node::from_binary(&*keyed.to_binary()).unwrap());
     /// ```
     pub fn root() -> Self {
-        Node {
-            loc: Vec::new(),
-            key: Vec::new(),
-        }
+        Self::default()
     }
 
     /// Returns a reference to the tree position of this node.
@@ -511,14 +501,16 @@ impl Node {
             'payloader: while let Some(&&seg) = it.peek() {
                 // extract the only bits in the current byte that
                 // are part of the term we're reading.
-                let until_end: u8 = U8_WIDTH - cursor;
+                let until_end = U8_WIDTH - cursor;
                 let mut data_mask = (seg << cursor) >> cursor;
                 data_mask >>= until_end.saturating_sub(nz_tot);
 
+                let safe_bits = cmp::min(nz_tot, until_end);
+
                 // copy safe_bits bits from data_mask to term.
-                let safe_bits: u8 = cmp::min(nz_tot, until_end);
                 term <<= safe_bits;
                 term |= u64::from(data_mask);
+
                 nz_tot -= safe_bits;
 
                 rotate_consume(&mut it, &mut cursor, safe_bits)?;
